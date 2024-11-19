@@ -1,74 +1,150 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { Button, View, TextInput, Text, StyleSheet, Alert, Platform } from 'react-native';
+import axios from 'axios';
+import { router } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+const API_URL = 'https://api-control-motor.onrender.com';
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+const LoginScreen = () => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [token, setToken] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
+
+    const handleLogin = async () => {
+        setErrorMessage(''); // Limpia el mensaje de error anterior
+        try {
+            const response = await axios.post(`${API_URL}/api/login`, {
+                usuario: username,
+                contraseña: password,
+            });
+
+            const jwtToken = response.data.token;
+            if (jwtToken) {
+                setToken(jwtToken);
+                alert('Login exitoso');
+                 // Guardamos el token según la plataforma (Web o React Native)
+                 if (Platform.OS === 'web') {
+                  // En la web, usamos localStorage
+                  localStorage.setItem('userToken', jwtToken);
+                  console.log('Token guardado en localStorage');
+                  router.push({
+                    pathname: './control',
+                    params: { token: jwtToken } // Redirige y pasa el token como parámetro
+                });
+              } else {
+                   // Guardamos el token en un archivo, ajustando según la plataforma
+                const fileUri = Platform.OS === 'ios'
+                ? FileSystem.documentDirectory + 'userToken.txt'
+                : FileSystem.documentDirectory + 'userToken.txt'; // Para Android y otras plataformas, puedes ajustar según sea necesario
+
+            await FileSystem.writeAsStringAsync(fileUri, jwtToken);
+            console.log('Token guardado en archivo');
+            router.push({
+                pathname: './control',
+                params: { token: jwtToken } // Redirige y pasa el token como parámetro
+            });
+              }
+               
+            } else {
+                setErrorMessage('No se recibió un token válido. Contacte al administrador.');
+            }
+        } catch (error: unknown) {
+            if (axios.isAxiosError(error)) {
+                if (error.response) {
+                    if (error.response.status === 401) {
+                        setErrorMessage('Usuario o contraseña incorrectos.');
+                    } else {
+                        setErrorMessage('Error con la respuesta del servidor.');
+                    }
+                } else {
+                    setErrorMessage('No se recibió respuesta del servidor.');
+                }
+            } else if (error instanceof Error) {
+                setErrorMessage(`Error: ${error.message}`);
+            } else {
+                setErrorMessage('Ocurrió un error desconocido.');
+            }
+            console.error('Error en el login:', error);
+        }
+    };
+
+    return (
+        <View style={styles.container}>
+            <View style={styles.formContainer}>
+                <Text style={styles.title}>Iniciar Sesión</Text>
+                <TextInput
+                    placeholder="Usuario"
+                    value={username}
+                    onChangeText={setUsername}
+                    style={styles.input}
+                    autoCapitalize="none"
+                />
+                <TextInput
+                    placeholder="Contraseña"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                    style={styles.input}
+                    autoCapitalize="none"
+                />
+                <Button title="Iniciar sesión" onPress={handleLogin} />
+                {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+                {token ? <Text style={styles.tokenText}>Token: {token}</Text> : null}
+            </View>
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+    container: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#f5f5f5',
+        padding: 20,
+    },
+    formContainer: {
+        width: '100%',
+        maxWidth: 400,
+        backgroundColor: 'white',
+        padding: 20,
+        borderRadius: 10,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    title: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        textAlign: 'center',
+        color: '#333',
+    },
+    input: {
+        width: '100%',
+        height: 40,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 5,
+        marginBottom: 15,
+        paddingHorizontal: 10,
+        backgroundColor: '#fff',
+    },
+    errorText: {
+        color: 'red',
+    },
+    tokenText: {
+        marginTop: 20,
+        color: 'green',
+        fontSize: 16,
+    },
 });
+
+export default LoginScreen;
